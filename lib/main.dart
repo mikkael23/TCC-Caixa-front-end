@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:plataforma/cameraAcessar.dart';
-import 'package:plataforma/cameraCadastrar.dart'; // Certifique-se de que este caminho e importação estejam corretos.
+import 'package:plataforma/cameraCadastrar.dart';
 
 void main() {
   runApp(MyApp());
@@ -16,21 +16,6 @@ class MyApp extends StatelessWidget {
 }
 
 class ButtonScreen extends StatelessWidget {
-  void Acessar(BuildContext context) {
-    print("O botão foi pressionado!");
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => CameraPageAcessar()), // Substitua CameraPage pela sua página de destino.
-    );
-  }
-  void Cadastrar(BuildContext context) {
-    print("O botão foi pressionado!");
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => CameraPageCadastrar()), // Substitua CameraPage pela sua página de destino.
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -39,15 +24,21 @@ class ButtonScreen extends StatelessWidget {
       ),
       body: Center(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center, // Centraliza os itens na coluna
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             ElevatedButton(
-              onPressed: () => Acessar(context),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => CameraPageAcessar()),
+              ),
               child: Text('Acessar'),
             ),
-            SizedBox(height: 20), // Espaço entre os botões
+            SizedBox(height: 20),
             ElevatedButton(
-              onPressed: () => Cadastrar(context),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => CameraPageCadastrar()),
+              ),
               child: Text('Cadastrar'),
             ),
           ],

@@ -1,36 +1,42 @@
-import 'dart:typed_data';
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io'; // Importante para lidar com arquivos
+import 'package:http/http.dart' as http;
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:plataforma/fonsoes.dart';
 
 class CameraPageCadastrar extends StatefulWidget {
   @override
-  _CameraPageState createState() => _CameraPageState();
+  _CameraPageCadastrarState createState() => _CameraPageCadastrarState();
 }
 
-class _CameraPageState extends State<CameraPageCadastrar> {
+class _CameraPageCadastrarState extends State<CameraPageCadastrar> {
   CameraController? _cameraController;
   List<CameraDescription>? _cameras;
   bool _isCameraInitialized = false;
-  TextEditingController _nameController =
-      TextEditingController(); // Controller para o nome do usuário
+  Timer? _timer;
+  bool _isScreenPink = false;
 
   @override
   void initState() {
     super.initState();
     _initializeCamera();
+    var fotos = {
+      "frente",
+      "direita",
+      "esquerda",
+      "cima",
+      "baixo"
+    };
   }
 
-  // Inicializando a câmera
   Future<void> _initializeCamera() async {
     _cameras = await availableCameras();
 
     if (_cameras != null && _cameras!.isNotEmpty) {
       final frontCamera = _cameras!.firstWhere(
         (camera) => camera.lensDirection == CameraLensDirection.front,
-        orElse: () =>
-            _cameras![0], // Fallback para a primeira câmera disponível
+        orElse: () => _cameras![0],
       );
 
       _cameraController = CameraController(
@@ -42,73 +48,121 @@ class _CameraPageState extends State<CameraPageCadastrar> {
       setState(() {
         _isCameraInitialized = true;
       });
+
+      _capturarImagens();
     } else {
       print('Nenhuma câmera encontrada.');
     }
   }
 
+  void _capturarImagens() {
+    _timer = Timer.periodic(Duration(seconds: 3), (timer) async {
+      if (_cameraController != null && _isCameraInitialized) {
+        try {
+          final image = await _cameraController!.takePicture();
+          print('Foto capturada: ${image.path}');
+
+          // Exibe a tela rosa de imediato
+          setState(() {
+            _isScreenPink = true;
+          });
+
+          await Future.delayed(Duration(milliseconds: 300)); // Espera 300ms
+
+          setState(() {
+            _isScreenPink = false;
+          });
+
+          await _enviarImagem(image.path);
+        } catch (e) {
+          print('Erro ao capturar a imagem: $e');
+        }
+      }
+    });
+  }
+
+  Future<void> _enviarImagem(String imagePath) async {
+    try {
+      print('Enviando imagem para: $imagePath');
+
+      var request = http.MultipartRequest(
+          'POST', Uri.parse('http://192.168.0.9:5000/detectar_rosto'));
+
+      // Verifique se o caminho do arquivo é válido
+      if (await File(imagePath).exists()) {
+        request.files.add(await http.MultipartFile.fromPath('file', imagePath));
+      } else {
+        print('Arquivo não encontrado: $imagePath');
+        return;
+      }
+
+      http.StreamedResponse response = await request.send();
+
+      if (response.statusCode == 200) {
+        String responseBody = await response.stream.bytesToString();
+        // Decodificar a resposta JSON para um Map
+        var jsonResponse = jsonDecode(responseBody);
+
+        // Acessar a chave 'lado_identificado' no mapa decodificado
+        print('Resposta do servidor: ${jsonResponse['lado_identificado']}');
+
+        if (jsonResponse['lado_identificado'] == 'frente') {
+          print('sucesso');
+        } else {
+          print('tire uma nova foto');
+        }
+      } else {
+        print('Erro ao enviar imagem. Status: ${response.statusCode}');
+        print('Razão: ${response.reasonPhrase}');
+      }
+    } catch (e) {
+      print('Erro ao enviar imagem: $e');
+    }
+  }
+
   @override
   void dispose() {
+    _timer?.cancel();
     _cameraController?.dispose();
-    _nameController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Cadastrar Usuário'),
+      backgroundColor: Colors.black, // Fundo preto
+      body: Center(
+        child: Stack(
+          children: [
+            // Camera Preview, sempre centralizado
+            _isCameraInitialized
+                ? Center(
+                    child: SizedBox(
+                      width: MediaQuery.of(context).size.width * 1,
+                      height: MediaQuery.of(context).size.height * 0.83,
+                      child: Transform(
+                        alignment: Alignment.center,
+                        transform: Matrix4.rotationY(3.14159), // Espelhamento horizontal
+                        child: AspectRatio(
+                          aspectRatio: _cameraController!.value.aspectRatio,
+                          child: CameraPreview(_cameraController!),
+                        ),
+                      ),
+                    ),
+                  )
+                : CircularProgressIndicator(),
+
+            // Tela rosa de forma instantânea
+            _isScreenPink
+                ? Container(
+                    color: const Color.fromARGB(94, 102, 102, 102),
+                    width: double.infinity,
+                    height: double.infinity,
+                  )
+                : SizedBox.shrink(), // Exibe um SizedBox vazio quando a tela não é rosa
+          ],
+        ),
       ),
-      body: _isCameraInitialized
-          ? Padding(
-              padding: EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  // Campo de texto para o nome do usuário
-                  TextField(
-                    controller: _nameController,
-                    decoration: InputDecoration(labelText: 'Nome do Usuário'),
-                    textInputAction: TextInputAction.done,
-                  ),
-                  SizedBox(height: 16),
-                  Expanded(
-                    child: CameraPreview(_cameraController!),
-                  ),
-                  SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () async {
-                      String username = _nameController.text.trim();
-                      if (username.isEmpty) {
-                        // Verificar se o nome do usuário foi preenchido
-                        showDialog(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: Text('Erro'),
-                            content:
-                                Text('Por favor, insira o nome do usuário.'),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context),
-                                child: Text('OK'),
-                              ),
-                            ],
-                          ),
-                        );
-                      } else {
-                        // Passando o context para a função
-                        await captureAndSendImage(context, _cameraController!,
-                            _isCameraInitialized, username);
-                      }
-                    },
-                    child: Text('Capturar e Enviar'),
-                  ),
-                ],
-              ),
-            )
-          : Center(
-              child: CircularProgressIndicator(),
-            ),
     );
   }
 }
